@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  password        String
+  credits         Int      @default(10)
+  githubConnected Boolean  @default(false)
+  githubUser      String?
+  githubToken     String?
+  apiKeys         ApiKey[]
+  scans           Scan[]
+  transactions    Transaction[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  lastUsed  DateTime?
+}
+
+model Scan {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  targetUrl         String
+  timestamp         DateTime @default(now())
+  duration          Int      // in seconds
+  endpointsScanned  Int
+  threatsIdentified Int
+  securityScore     Int
+  summary           String
+  vulnerabilities   String   // JSON string of Vulnerability[]
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  amount    Float
+  reference String   @unique
+  status    String   @default("PENDING") // PENDING, SUCCESS, FAILED
+  credits   Int
+  createdAt DateTime @default(now())
+}

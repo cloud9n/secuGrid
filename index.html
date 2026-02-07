@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecuGrid | AI Security Operations</title>
+  <link rel="icon" type="image/svg+xml"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5L89 27.5V72.5L50 95L11 72.5V27.5L50 5Z' fill='%23050a10' stroke='%2310b981' stroke-width='4'/%3E%3Cpath d='M11 27.5L50 50M89 27.5L50 50M50 95L50 50' stroke='%231e293b' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='15' fill='%2310b981' fill-opacity='0.2'/%3E%3Ccircle cx='50' cy='50' r='8' fill='%2310b981'/%3E%3Ccircle cx='50' cy='27.5' r='3' fill='%230ea5e9'/%3E%3Ccircle cx='71.5' cy='61.25' r='3' fill='%230ea5e9'/%3E%3Ccircle cx='28.5' cy='61.25' r='3' fill='%230ea5e9'/%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            cyber: {
+              900: '#050a10',
+              800: '#0f172a',
+              700: '#1e293b',
+              500: '#0ea5e9', // Blue
+              400: '#38bdf8',
+              accent: '#10b981', // Emerald/Green for success/hacker vibe
+              danger: '#ef4444',
+              warning: '#f59e0b',
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'typewriter': 'typewriter 2s steps(40) 1s 1 normal both',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #050a10;
+      color: #e2e8f0;
+    }
+
+    /* Custom scrollbar for terminal feel */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
+  }
+}
+</script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>

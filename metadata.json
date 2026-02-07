@@ -1,0 +1,5 @@
+{
+  "name": "SecuGrid - AI Security Audit",
+  "description": "An automated penetration testing and security audit platform powered by AI agents. Simulate attacks, identify vulnerabilities, and receive remediation plans.",
+  "requestFramePermissions": []
+}
