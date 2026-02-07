@@ -53,9 +53,11 @@ router.post('/', authenticate, async (req: any, res) => {
 
 router.get('/history', authenticate, async (req: any, res) => {
     try {
+        const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
         const scans = await prisma.scan.findMany({
             where: { userId: req.userId },
-            orderBy: { timestamp: 'desc' }
+            orderBy: { timestamp: 'desc' },
+            take: limit
         });
 
         const parsedScans = scans.map(scan => ({

@@ -27,7 +27,7 @@ export const userApi = {
 
 export const scanApi = {
     saveScan: (data: any) => api.post('/scans', data),
-    getHistory: () => api.get('/scans/history'),
+    getHistory: (limit?: number) => api.get('/scans/history', { params: { limit } }),
 };
 
 export const paymentApi = {

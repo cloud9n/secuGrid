@@ -55,6 +55,7 @@ export interface User {
   credits: number;
   githubConnected: boolean;
   githubUser?: string;
+  createdAt?: string;
   apiKeys: ApiKey[];
 }
 
