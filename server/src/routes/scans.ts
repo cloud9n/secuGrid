@@ -21,6 +21,34 @@ const authenticate = (req: any, res: any, next: any) => {
     }
 };
 
+// Helper for API Key auth
+const authenticateKey = async (req: any, res: any, next: any) => {
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey) return res.status(401).json({ error: 'X-API-KEY header missing' });
+
+    try {
+        const keyRecord = await prisma.apiKey.findUnique({
+            where: { key: apiKey as string },
+            include: { user: true }
+        });
+
+        if (!keyRecord) return res.status(401).json({ error: 'Invalid API Key' });
+
+        await prisma.apiKey.update({
+            where: { id: keyRecord.id },
+            data: { lastUsed: new Date() }
+        });
+
+        req.userId = keyRecord.userId;
+        req.user = keyRecord.user;
+        next();
+    } catch (err) {
+        res.status(500).json({ error: 'Auth failed' });
+    }
+};
+
+import { analyzeSourceCode } from '../../../services/geminiService';
+
 router.post('/', authenticate, async (req: any, res) => {
     try {
         const { targetUrl, duration, endpointsScanned, threatsIdentified, securityScore, summary, vulnerabilities } = req.body;
@@ -34,7 +62,7 @@ router.post('/', authenticate, async (req: any, res) => {
                 threatsIdentified,
                 securityScore,
                 summary,
-                vulnerabilities: JSON.stringify(vulnerabilities)
+                vulnerabilities: typeof vulnerabilities === 'string' ? vulnerabilities : JSON.stringify(vulnerabilities)
             }
         });
 
@@ -68,6 +96,44 @@ router.get('/history', authenticate, async (req: any, res) => {
         res.json(parsedScans);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+router.post('/cli', authenticateKey, async (req: any, res) => {
+    try {
+        const { codeContent, targetUrl } = req.body;
+
+        if (req.user.credits < 1) {
+            return res.status(403).json({ error: 'Insufficient credits. Buy more to continue.' });
+        }
+
+        // Run actual AI analysis
+        const report = await analyzeSourceCode(codeContent);
+
+        // Save scan
+        await prisma.scan.create({
+            data: {
+                userId: req.userId,
+                targetUrl: targetUrl || 'cli-scan',
+                duration: report.stats.duration,
+                endpointsScanned: report.stats.endpointsScanned,
+                threatsIdentified: report.stats.threatsIdentified,
+                securityScore: report.stats.securityScore,
+                summary: report.summary,
+                vulnerabilities: JSON.stringify(report.vulnerabilities)
+            }
+        });
+
+        // Deduct credit
+        await prisma.user.update({
+            where: { id: req.userId },
+            data: { credits: { decrement: 1 } }
+        });
+
+        res.json(report);
+    } catch (error) {
+        console.error('CLI Scan Error:', error);
+        res.status(500).json({ error: 'AI Analysis failed' });
     }
 });
 

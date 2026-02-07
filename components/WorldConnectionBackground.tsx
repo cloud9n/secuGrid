@@ -14,65 +14,26 @@ const WorldConnectionBackground: React.FC = () => {
         let width = canvas.width = window.innerWidth;
         let height = canvas.height = window.innerHeight;
 
-        // --- World Map "Dots" ---
-        // A simplified set of coordinates approximating continents (0-100 scale)
-        // Roughly: North America, South America, Europe, Africa, Asia, Australia
-        const mapPoints: [number, number][] = [
+        // --- Simplified World Data (Percentage based) ---
+        // This is a refined set of points to form a recognizable world shape
+        const worldDots: [number, number][] = [
             // North America
-            [15, 20], [20, 22], [25, 25], [10, 25], [18, 30], [22, 35], [28, 32],
+            [12, 18], [15, 17], [18, 18], [22, 18], [25, 20], [28, 18], [10, 22], [14, 21], [18, 22], [22, 22], [26, 23], [30, 22], [11, 26], [15, 25], [19, 26], [23, 27], [27, 26], [31, 26], [13, 30], [17, 31], [21, 31], [25, 30], [29, 31], [16, 35], [20, 36], [24, 35], [18, 40], [22, 41],
             // South America
-            [28, 55], [32, 60], [30, 70], [35, 65], [38, 50],
+            [26, 50], [30, 48], [27, 54], [31, 53], [35, 52], [28, 58], [32, 57], [36, 56], [29, 62], [33, 61], [31, 66], [34, 65], [32, 70], [33, 75],
             // Europe
-            [50, 25], [52, 22], [55, 20], [58, 28], [52, 30],
+            [48, 20], [52, 19], [56, 18], [47, 24], [51, 23], [55, 22], [59, 21], [49, 28], [53, 27], [57, 26], [61, 25], [52, 32], [56, 31], [60, 30],
             // Africa
-            [50, 45], [55, 50], [52, 60], [58, 65], [60, 55], [55, 40],
+            [48, 40], [52, 39], [56, 38], [60, 39], [49, 45], [53, 44], [57, 43], [61, 44], [51, 50], [55, 49], [59, 48], [63, 49], [52, 55], [56, 54], [60, 53], [54, 60], [58, 59], [55, 65], [57, 70],
             // Asia
-            [70, 25], [75, 22], [80, 28], [85, 35], [72, 35], [65, 30], [82, 45], [90, 30],
+            [68, 18], [72, 17], [76, 16], [80, 15], [84, 16], [88, 17], [92, 18], [69, 22], [73, 21], [77, 20], [81, 19], [85, 20], [89, 21], [93, 22], [70, 26], [74, 25], [78, 24], [82, 23], [86, 24], [90, 25], [94, 26], [72, 30], [76, 31], [80, 29], [84, 30], [88, 31], [92, 30], [75, 35], [79, 36], [83, 35], [87, 36], [91, 35], [78, 41], [82, 42], [86, 41], [90, 42], [81, 47], [85, 48], [89, 47],
             // Australia
-            [85, 75], [90, 72], [88, 80]
+            [82, 68], [86, 67], [90, 68], [83, 73], [87, 72], [91, 73], [85, 78], [89, 77]
         ];
 
-        // Scale points to canvas
-        const getScaledPoint = (p: [number, number]) => ({
-            x: (p[0] / 100) * width,
-            y: (p[1] / 100) * height * 0.8 + (height * 0.1) // Center vertically a bit
-        });
-
-        // Create Nodes from Map Points + Random Filler
         interface Node { x: number; y: number; active: boolean; isHub: boolean }
         let nodes: Node[] = [];
-
-        const initNodes = () => {
-            nodes = [];
-            // Map Hubs
-            mapPoints.forEach(p => {
-                const { x, y } = getScaledPoint(p);
-                // Add some jitter
-                nodes.push({
-                    x: x + (Math.random() - 0.5) * 20,
-                    y: y + (Math.random() - 0.5) * 20,
-                    active: Math.random() > 0.5,
-                    isHub: true
-                });
-            });
-
-            // Random filler nodes for atmosphere
-            const numFiller = 20;
-            for (let i = 0; i < numFiller; i++) {
-                nodes.push({
-                    x: Math.random() * width,
-                    y: Math.random() * height,
-                    active: Math.random() > 0.8,
-                    isHub: false
-                });
-            }
-        };
-
-        initNodes();
-
-
-        // "Signals" moving between nodes
-        const signals: {
+        let signals: {
             startX: number;
             startY: number;
             endX: number;
@@ -82,63 +43,74 @@ const WorldConnectionBackground: React.FC = () => {
             isSecured: boolean
         }[] = [];
 
+        const getScaledPos = (p: [number, number]) => ({
+            x: (p[0] / 100) * width,
+            y: (p[1] / 100) * height
+        });
 
-        // --- Render Loop ---
+        const init = () => {
+            nodes = worldDots.map(p => ({
+                ...getScaledPos(p),
+                active: Math.random() > 0.7,
+                isHub: Math.random() > 0.8
+            }));
+            signals = [];
+        };
+
         const render = () => {
             ctx.clearRect(0, 0, width, height);
 
-            // 0. Draw World Map Outline (Optional explicit map, here we imply it via nodes)
-            // For a better "map" feel, we could draw faint dots for all mapPoints first? 
-            // Let's stick to the network graph implying the map.
-
             // 1. Draw Connections
             ctx.lineWidth = 0.5;
-
             nodes.forEach((node, i) => {
+                if (!node.isHub) return;
+
                 nodes.forEach((otherNode, j) => {
-                    if (i >= j) return;
+                    if (i === j || !otherNode.isHub) return;
+
                     const dx = node.x - otherNode.x;
                     const dy = node.y - otherNode.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    // Connect if close enough. Hubs connect further.
-                    const maxDist = (node.isHub && otherNode.isHub) ? width * 0.15 : width * 0.08;
-
+                    // Connect hubs that are reasonably close (cross-continental feel)
+                    const maxDist = width * 0.25;
                     if (dist < maxDist) {
                         ctx.beginPath();
-                        ctx.strokeStyle = node.isHub && otherNode.isHub ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.05)';
+                        ctx.strokeStyle = `rgba(16, 185, 129, ${0.1 * (1 - dist / maxDist)})`;
                         ctx.moveTo(node.x, node.y);
                         ctx.lineTo(otherNode.x, otherNode.y);
                         ctx.stroke();
 
-                        // Spawn signals
-                        if (Math.random() < 0.002) {
+                        // Occasional signal
+                        if (Math.random() < 0.001) {
                             signals.push({
                                 startX: node.x,
                                 startY: node.y,
                                 endX: otherNode.x,
                                 endY: otherNode.y,
                                 progress: 0,
-                                speed: Math.random() * 0.02 + 0.005,
-                                isSecured: Math.random() > 0.2
+                                speed: random(0.005, 0.015),
+                                isSecured: Math.random() > 0.3
                             });
                         }
                     }
                 });
-
-                // 2. Draw Nodes
-                ctx.fillStyle = node.isHub
-                    ? (node.active ? 'rgba(16, 185, 129, 0.8)' : 'rgba(16, 185, 129, 0.3)')
-                    : 'rgba(16, 185, 129, 0.1)';
-
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, node.isHub ? 2 : 1, 0, Math.PI * 2);
-                ctx.fill();
-
-                if (Math.random() < 0.01) node.active = !node.active;
             });
 
-            // 3. Draw Moving Signals
+            // 2. Draw Dots (The World Map)
+            nodes.forEach(node => {
+                ctx.fillStyle = node.isHub
+                    ? (node.active ? 'rgba(16, 185, 129, 0.8)' : 'rgba(16, 185, 129, 0.4)')
+                    : 'rgba(16, 185, 129, 0.15)';
+
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.isHub ? 2.5 : 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (Math.random() < 0.005) node.active = !node.active;
+            });
+
+            // 3. Draw Signals
             for (let i = signals.length - 1; i >= 0; i--) {
                 const s = signals[i];
                 s.progress += s.speed;
@@ -152,11 +124,11 @@ const WorldConnectionBackground: React.FC = () => {
                 const currY = s.startY + (s.endY - s.startY) * s.progress;
 
                 ctx.fillStyle = s.isSecured ? '#10b981' : '#ef4444';
-                ctx.shadowBlur = s.isSecured ? 4 : 6;
+                ctx.shadowBlur = s.isSecured ? 5 : 10;
                 ctx.shadowColor = s.isSecured ? '#10b981' : '#ef4444';
 
                 ctx.beginPath();
-                ctx.arc(currX, currY, s.isSecured ? 1.5 : 2, 0, Math.PI * 2);
+                ctx.arc(currX, currY, s.isSecured ? 2 : 2.5, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.shadowBlur = 0;
             }
@@ -164,12 +136,15 @@ const WorldConnectionBackground: React.FC = () => {
             requestAnimationFrame(render);
         };
 
+        const random = (min: number, max: number) => Math.random() * (max - min) + min;
+
+        init();
         render();
 
         const handleResize = () => {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
-            initNodes();
+            init();
         };
 
         window.addEventListener('resize', handleResize);
@@ -180,7 +155,7 @@ const WorldConnectionBackground: React.FC = () => {
         <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none z-0"
-            style={{ opacity: 0.5 }}
+            style={{ opacity: 0.7 }}
         />
     );
 };

@@ -1,0 +1,26 @@
+{
+    "name": "secugrid",
+    "version": "1.0.0",
+    "description": "SecuGrid CLI - AI Powered Security Audits",
+    "main": "dist/index.js",
+    "bin": {
+        "secugrid": "./dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node index.ts"
+    },
+    "dependencies": {
+        "axios": "^1.6.0",
+        "chalk": "^4.1.2",
+        "commander": "^11.1.0",
+        "dotenv": "^16.3.1",
+        "glob": "^10.3.10"
+    },
+    "devDependencies": {
+        "@types/node": "^20.8.2",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.2.2"
+    }
+}
