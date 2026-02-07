@@ -1,12 +1,13 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import axios from 'axios';
+import Stripe from 'stripe';
 import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || ''; // Should be set in .env
+const stripe = new Stripe(STRIPE_SECRET_KEY);
 
 // Middleware to authenticate JWT
 const authenticate = (req: any, res: any, next: any) => {
@@ -23,79 +24,92 @@ const authenticate = (req: any, res: any, next: any) => {
     }
 };
 
-router.post('/initialize', authenticate, async (req: any, res) => {
+router.post('/create-checkout-session', authenticate, async (req: any, res) => {
     try {
         const { amount, credits } = req.body;
-        const reference = `secugrid_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+        // user id is req.userId
 
-        await prisma.transaction.create({
-            data: {
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price_data: {
+                        currency: 'usd',
+                        product_data: {
+                            name: `${credits} Credits`,
+                            description: 'SecuGrid AI Audit Credits',
+                        },
+                        unit_amount: Math.round(amount * 100), // Stripe expects cents
+                    },
+                    quantity: 1,
+                },
+            ],
+            mode: 'payment',
+            success_url: `${req.headers.origin}/settings?session_id={CHECKOUT_SESSION_ID}&credits=${credits}`,
+            cancel_url: `${req.headers.origin}/settings?canceled=true`,
+            metadata: {
                 userId: req.userId,
-                amount,
-                credits,
-                reference,
-                status: 'PENDING'
-            }
+                credits: credits.toString(),
+            },
         });
 
-        res.json({ reference });
+        res.json({ sessionId: session.id, url: session.url });
     } catch (error) {
-        console.error('Failed to initialize payment', error);
+        console.error('Stripe session creation failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-router.post('/verify', authenticate, async (req: any, res) => {
+router.post('/verify-session', authenticate, async (req: any, res) => {
     try {
-        const { reference } = req.body;
+        const { sessionId } = req.body;
 
-        // Call Paystack to verify
-        const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
-            headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET}`
-            }
-        });
+        // Retrieve the session from Stripe to verify status
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-        if (response.data.data.status === 'success') {
-            const transaction = await prisma.transaction.findUnique({
-                where: { reference }
+        if (session.payment_status === 'paid') {
+            const userId = session.metadata?.userId;
+            const credits = parseInt(session.metadata?.credits || '0');
+            const transactionId = session.payment_intent as string || session.id;
+
+            // Check if we already credited this transaction
+            const existingTx = await prisma.transaction.findUnique({
+                where: { reference: transactionId } // We'll leverage the 'reference' field for Stripe ID
             });
 
-            if (!transaction) {
-                return res.status(404).json({ error: 'Transaction not found' });
+            if (existingTx && existingTx.status === 'SUCCESS') {
+                return res.json({ message: 'Credits already awarded', credits: (await prisma.user.findUnique({ where: { id: userId } }))?.credits });
             }
 
-            if (transaction.status === 'SUCCESS') {
-                return res.json({ message: 'Credits already awarded' });
-            }
-
-            // Update transaction and user credits
+            // If not, record the transaction and update user
             await prisma.$transaction([
-                prisma.transaction.update({
-                    where: { reference },
-                    data: { status: 'SUCCESS' }
+                prisma.transaction.upsert({
+                    where: { reference: transactionId },
+                    update: { status: 'SUCCESS' },
+                    create: {
+                        userId: userId!,
+                        amount: session.amount_total! / 100,
+                        credits: credits,
+                        reference: transactionId,
+                        status: 'SUCCESS'
+                    }
                 }),
                 prisma.user.update({
-                    where: { id: req.userId },
-                    data: { credits: { increment: transaction.credits } }
+                    where: { id: userId },
+                    data: { credits: { increment: credits } }
                 })
             ]);
 
-            const updatedUser = await prisma.user.findUnique({
-                where: { id: req.userId }
-            });
-
+            const updatedUser = await prisma.user.findUnique({ where: { id: userId } });
             res.json({ status: 'success', credits: updatedUser?.credits });
+
         } else {
-            await prisma.transaction.update({
-                where: { reference },
-                data: { status: 'FAILED' }
-            });
-            res.status(400).json({ status: 'failed', error: 'Payment verification failed' });
+            res.json({ status: 'pending' });
         }
+
     } catch (error) {
-        console.error('Payment verification error', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Session verification failed', error);
+        res.status(500).json({ error: 'Verification failed' });
     }
 });
 

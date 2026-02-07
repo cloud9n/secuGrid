@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -31,8 +31,8 @@ export const scanApi = {
 };
 
 export const paymentApi = {
-    initialize: (amount: number, credits: number) => api.post('/payment/initialize', { amount, credits }),
-    verify: (reference: string) => api.post('/payment/verify', { reference }),
+    createCheckoutSession: (amount: number, credits: number) => api.post('/payment/create-checkout-session', { amount, credits }),
+    verify: (sessionId: string) => api.post('/payment/verify-session', { sessionId }),
 };
 
 export default api;

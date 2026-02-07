@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 import DashboardPage from './pages/DashboardPage';
@@ -9,89 +9,65 @@ import GithubConnectPage from './pages/GithubConnectPage';
 import DocsPage from './pages/DocsPage';
 import SettingsPage from './pages/SettingsPage';
 import HistoryPage from './pages/HistoryPage';
-import { Loader2, Key, Trash2, Copy, Check, Clock, Plus, Eye, EyeOff, ShieldCheck, Zap, User as UserIcon } from 'lucide-react';
-import { authApi, userApi, scanApi, paymentApi } from './services/api';
+import AuthPage from './pages/AuthPage';
+import { Loader2 } from 'lucide-react';
+import { userApi, scanApi, paymentApi } from './services/api';
+import { User, ScanReport, Repository } from './types';
 
-declare const PaystackPop: any;
+// Stripe integration will use direct redirects or @stripe/stripe-js if needed
 
-const AuthView: React.FC<{ onAuth: (data: { token: string; user: User }) => void }> = ({ onAuth }) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// Protected Route Wrapper
+const ProtectedRoute = ({ user, children }: { user: User | null; children: JSX.Element }) => {
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = isLogin
-        ? await authApi.login({ email, password })
-        : await authApi.register({ email, password });
+// Report Page Wrapper to handle location state
+const ReportWrapper = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const report = location.state?.report as ScanReport | undefined;
 
-      localStorage.setItem('token', response.data.token);
-      onAuth(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!report) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-cyber-800 border border-cyber-700 p-8 rounded-xl shadow-2xl">
-        <h2 className="text-2xl font-bold text-white mb-6 text-center">
-          {isLogin ? 'Secure Access Terminal' : 'Agent Commissioning'}
-        </h2>
-        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded mb-4 text-sm">{error}</div>}
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Agent Identity</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="agent@secugrid.ai"
-              className="w-full bg-cyber-900 border border-cyber-700 rounded p-2 text-white focus:border-cyber-accent outline-none font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Access Token</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-cyber-900 border border-cyber-700 rounded p-2 text-white focus:border-cyber-accent outline-none"
-            />
-          </div>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full bg-cyber-accent hover:bg-emerald-600 disabled:opacity-50 text-cyber-900 font-bold py-3 rounded-lg transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] flex items-center justify-center gap-2"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isLogin ? 'Authenticate Agent' : 'Register New Agent'}
-          </button>
+    <ReportPage
+      report={report}
+      onBack={() => navigate('/dashboard')}
+    />
+  );
+};
 
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="w-full text-gray-400 text-sm hover:text-white transition-colors"
-          >
-            {isLogin ? "New agent? Request access" : "Already registered? Login here"}
-          </button>
-        </div>
-      </div>
-    </div>
+// Dashboard Wrapper to handle location state
+const DashboardWrapper = ({
+  user,
+  onScanComplete
+}: {
+  user: User;
+  onScanComplete: (report: ScanReport) => void;
+}) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const repo = location.state?.repo as Repository | undefined;
+
+  return (
+    <DashboardPage
+      user={user}
+      onScanComplete={onScanComplete}
+      prefilledRepo={repo}
+      onClearRepo={() => navigate('/dashboard', { replace: true, state: {} })}
+    />
   );
 };
 
 export default function App() {
-  const [page, setPage] = useState<string>('landing');
   const [user, setUser] = useState<User | null>(null);
-  const [currentReport, setCurrentReport] = useState<ScanReport | null>(null);
-  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -104,19 +80,74 @@ export default function App() {
           localStorage.removeItem('token');
         }
       }
+      setLoading(false);
     };
     fetchProfile();
   }, []);
 
+  // Handle Stripe Session Verification
+  const location = useLocation();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const sessionId = params.get('session_id');
+    const canceled = params.get('canceled');
+
+    if (sessionId && user) {
+      const verifySession = async () => {
+        try {
+          const response = await paymentApi.verify(sessionId);
+          if (response.data.status === 'success') {
+            const profile = await userApi.getProfile();
+            setUser(profile.data);
+            alert('Credits successfully added to your account!');
+            // Clean up URL
+            navigate('/settings', { replace: true });
+          }
+        } catch (err) {
+          console.error('Session verification failed', err);
+        }
+      };
+      verifySession();
+    } else if (canceled) {
+      alert('Payment was canceled.');
+      navigate('/settings', { replace: true });
+    }
+  }, [location, user, navigate]);
+
   const handleAuth = (data: { token: string; user: User }) => {
     setUser(data.user);
-    setPage('dashboard');
+    navigate('/dashboard');
   };
 
   const handleUpdateUser = (updates: Partial<User>) => {
     if (user) {
       setUser({ ...user, ...updates });
     }
+  };
+
+  const handleScanComplete = async (report: ScanReport) => {
+    if (user) {
+      try {
+        await scanApi.saveScan({
+          targetUrl: report.targetUrl,
+          duration: report.stats.duration,
+          endpointsScanned: report.stats.endpointsScanned,
+          threatsIdentified: report.stats.threatsIdentified,
+          securityScore: report.stats.securityScore,
+          summary: report.summary,
+          vulnerabilities: report.vulnerabilities
+        });
+        const profileResponse = await userApi.getProfile();
+        setUser(profileResponse.data);
+      } catch (err) {
+        console.error('Failed to save scan', err);
+      }
+    }
+    navigate('/report', { state: { report } });
+  };
+
+  const handleSelectRepo = (repo: Repository) => {
+    navigate('/dashboard', { state: { repo } });
   };
 
   const handleGenerateKey = async () => {
@@ -140,126 +171,111 @@ export default function App() {
     }
   };
 
-  const handleScanComplete = async (report: ScanReport) => {
-    setCurrentReport(report);
-    if (user) {
-      try {
-        await scanApi.saveScan({
-          targetUrl: report.targetUrl,
-          duration: report.stats.duration,
-          endpointsScanned: report.stats.endpointsScanned,
-          threatsIdentified: report.stats.threatsIdentified,
-          securityScore: report.stats.securityScore,
-          summary: report.summary,
-          vulnerabilities: report.vulnerabilities
-        });
-        const profileResponse = await userApi.getProfile();
-        setUser(profileResponse.data);
-      } catch (err) {
-        console.error('Failed to save scan', err);
-      }
-    }
-    setPage('report');
-  };
-
-  const handleSelectRepo = (repo: Repository) => {
-    setSelectedRepo(repo);
-    setPage('dashboard');
-  };
-
   const handleAddCredits = async (amount: number) => {
     if (!user) return;
 
-    // Simple pricing: $10 for 10 credits, $40 for 50, $70 for 100
     const priceMap: Record<number, number> = { 10: 10, 50: 40, 100: 70 };
     const price = priceMap[amount] || amount;
 
     try {
-      const initResponse = await paymentApi.initialize(price, amount);
-      const { reference } = initResponse.data;
-
-      const handler = PaystackPop.setup({
-        key: 'pk_test_your_public_key', // Replace with your actual public key
-        email: user.email,
-        amount: price * 100 * 1500, // Assuming NGN and 1500 rate for demo
-        currency: 'NGN',
-        ref: reference,
-        callback: async (response: any) => {
-          try {
-            const verifyResponse = await paymentApi.verify(response.reference);
-            if (verifyResponse.data.status === 'success') {
-              const profileResponse = await userApi.getProfile();
-              setUser(profileResponse.data);
-              alert(`${amount} credits successfully added to your account!`);
-            }
-          } catch (err) {
-            console.error('Verification failed', err);
-            alert('Payment verification failed. Please contact support.');
-          }
-        },
-        onClose: () => {
-          console.log('Payment window closed');
-        }
-      });
-      handler.openIframe();
+      const response = await paymentApi.createCheckoutSession(price, amount);
+      if (response.data.url) {
+        window.location.href = response.data.url; // Redirect to Stripe Checkout
+      }
     } catch (err) {
-      console.error('Payment initialization failed', err);
+      console.error('Stripe initialization failed', err);
       alert('Could not initialize payment. Please try again later.');
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-cyber-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-cyber-accent animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-cyber-900 text-gray-200 font-sans selection:bg-cyber-accent selection:text-cyber-900">
-      <Navbar user={user} onNavigate={setPage} currentPage={page} />
+      <Navbar user={user} />
 
       <main className="animate-in fade-in duration-500">
-        {page === 'landing' && <LandingPage onStart={() => setPage(user ? 'dashboard' : 'login')} />}
-        {page === 'login' && <AuthView onAuth={handleAuth} />}
-        {page === 'docs' && <DocsPage />}
-        {page === 'dashboard' && user && (
-          <DashboardPage
-            user={user}
-            onScanComplete={handleScanComplete}
-            prefilledRepo={selectedRepo}
-            onClearRepo={() => setSelectedRepo(null)}
+        <Routes>
+          <Route path="/" element={<LandingPage onStart={() => navigate(user ? '/dashboard' : '/login')} />} />
+          <Route path="/login" element={<AuthPage onAuth={handleAuth} />} />
+          <Route path="/docs" element={<DocsPage />} />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute user={user}>
+                <DashboardWrapper user={user!} onScanComplete={handleScanComplete} />
+              </ProtectedRoute>
+            }
           />
-        )}
-        {page === 'github' && user && (
-          <GithubConnectPage
-            user={user}
-            onUpdateUser={handleUpdateUser}
-            onSelectRepo={handleSelectRepo}
+
+          <Route
+            path="/github"
+            element={
+              <ProtectedRoute user={user}>
+                <GithubConnectPage
+                  user={user!}
+                  onUpdateUser={handleUpdateUser}
+                  onSelectRepo={handleSelectRepo}
+                />
+              </ProtectedRoute>
+            }
           />
-        )}
-        {page === 'report' && currentReport && (
-          <ReportPage
-            report={currentReport}
-            onBack={() => setPage('dashboard')}
+
+          <Route
+            path="/status"
+            element={
+              <ProtectedRoute user={user}>
+                <AgentStatusPage />
+              </ProtectedRoute>
+            }
           />
-        )}
-        {page === 'status' && user && <AgentStatusPage />}
-        {page === 'settings' && user && (
-          <SettingsPage
-            user={user}
-            onAddCredits={handleAddCredits}
-            onGenerateKey={handleGenerateKey}
-            onDeleteKey={handleDeleteKey}
-            onViewHistory={() => setPage('history')}
-            onViewReport={(report) => {
-              setCurrentReport(report);
-              setPage('report');
-            }}
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute user={user}>
+                <SettingsPage
+                  user={user!}
+                  onAddCredits={handleAddCredits}
+                  onGenerateKey={handleGenerateKey}
+                  onDeleteKey={handleDeleteKey}
+                  onViewHistory={() => navigate('/history')}
+                  onViewReport={(report) => navigate('/report', { state: { report } })}
+                />
+              </ProtectedRoute>
+            }
           />
-        )}
-        {page === 'history' && user && (
-          <HistoryPage
-            onBack={() => setPage('dashboard')}
-            onViewReport={(report) => {
-              setCurrentReport(report);
-              setPage('report');
-            }}
+
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute user={user}>
+                <HistoryPage
+                  onBack={() => navigate('/dashboard')}
+                  onViewReport={(report) => navigate('/report', { state: { report } })}
+                />
+              </ProtectedRoute>
+            }
           />
-        )}
+
+          <Route
+            path="/report"
+            element={
+              <ProtectedRoute user={user}>
+                <ReportWrapper />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
   );

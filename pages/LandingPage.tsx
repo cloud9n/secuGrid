@@ -2,8 +2,10 @@ import React from 'react';
 import { Shield, Cpu, Lock, Activity, Terminal as TerminalIcon } from 'lucide-react';
 import Logo from '../components/Logo';
 
+import WorldConnectionBackground from '../components/WorldConnectionBackground';
+
 const Feature: React.FC<{ icon: React.ReactNode, title: string, desc: string }> = ({ icon, title, desc }) => (
-  <div className="p-6 bg-cyber-800 border border-cyber-700 rounded-xl hover:border-cyber-500 transition-colors">
+  <div className="p-6 bg-cyber-800 border border-cyber-700 rounded-xl hover:border-cyber-500 transition-colors z-10 relative">
     <div className="w-12 h-12 bg-cyber-900 rounded-lg flex items-center justify-center text-cyber-accent mb-4">
       {icon}
     </div>
@@ -17,8 +19,13 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
     <div>
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-20 pb-32">
-        <div className="absolute inset-0 bg-[url('https://picsum.photos/1920/1080')] bg-cover opacity-5 grayscale"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-cyber-900/80 via-cyber-900/90 to-cyber-900"></div>
+        {/* Dynamic Background */}
+        <div className="absolute inset-0 bg-cyber-900 z-0">
+          <WorldConnectionBackground />
+        </div>
+
+        {/* Gradient Overlay for Text Readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-cyber-900/40 via-cyber-900/60 to-cyber-900 z-1 pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           <div className="flex justify-center mb-8">
