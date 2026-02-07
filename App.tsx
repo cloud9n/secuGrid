@@ -155,7 +155,7 @@ export default function App() {
     const newKeyString = `sk_secugrid_${Math.random().toString(36).substring(2)}`;
     try {
       const response = await userApi.addApiKey(newKeyString);
-      setUser({ ...user, apiKeys: [response.data, ...user.apiKeys] });
+      setUser({ ...user, apiKeys: [response.data, ...(user.apiKeys || [])] });
     } catch (err) {
       console.error('Failed to generate key', err);
     }
@@ -165,7 +165,7 @@ export default function App() {
     if (!user) return;
     try {
       await userApi.deleteApiKey(id);
-      setUser({ ...user, apiKeys: user.apiKeys.filter(k => k.id !== id) });
+      setUser({ ...user, apiKeys: (user.apiKeys || []).filter(k => k.id !== id) });
     } catch (err) {
       console.error('Failed to delete key', err);
     }
