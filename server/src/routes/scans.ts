@@ -47,7 +47,37 @@ const authenticateKey = async (req: any, res: any, next: any) => {
     }
 };
 
-import { analyzeSourceCode } from '../../../services/geminiService';
+import { analyzeSourceCode, analyzeTarget, simulateAttack, getRemediationAdvice } from '../services/geminiService';
+
+router.post('/analyze', authenticate, async (req: any, res) => {
+    try {
+        const { url } = req.body;
+        const report = await analyzeTarget(url);
+        res.json(report);
+    } catch (error) {
+        res.status(500).json({ error: 'Analysis failed' });
+    }
+});
+
+router.post('/simulate-attack', authenticate, async (req: any, res) => {
+    try {
+        const { url, type } = req.body;
+        const report = await simulateAttack(url, type);
+        res.json(report);
+    } catch (error) {
+        res.status(500).json({ error: 'Simulation failed' });
+    }
+});
+
+router.post('/remediation', authenticate, async (req: any, res) => {
+    try {
+        const { title, description, query } = req.body;
+        const advice = await getRemediationAdvice(title, description, query);
+        res.json({ advice });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get advice' });
+    }
+});
 
 router.post('/', authenticate, async (req: any, res) => {
     try {

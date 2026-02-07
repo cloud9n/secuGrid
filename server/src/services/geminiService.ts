@@ -69,8 +69,8 @@ const RESPONSE_SCHEMA = {
 };
 
 export const analyzeTarget = async (url: string): Promise<ScanReport> => {
-  const modelId = "gemini-3-pro-preview"; 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const modelId = "gemini-3-pro-preview";
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
   const prompt = `
     Perform a LIVE security assessment of: ${url}
@@ -100,7 +100,7 @@ export const analyzeTarget = async (url: string): Promise<ScanReport> => {
 
 export const simulateAttack = async (url: string, type: 'SQLI' | 'DDOS' | 'STRESS'): Promise<ScanReport> => {
   const modelId = "gemini-3-pro-preview";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
   const prompt = `
     Simulate a ${type} attack against ${url}. 
@@ -131,8 +131,8 @@ export const simulateAttack = async (url: string, type: 'SQLI' | 'DDOS' | 'STRES
 };
 
 export const analyzeSourceCode = async (code: string): Promise<ScanReport> => {
-  const modelId = "gemini-3-pro-preview"; 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const modelId = "gemini-3-pro-preview";
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
   const prompt = `PERFORM REAL STATIC CODE ANALYSIS ON THIS SNIPPET:\n\n${code.substring(0, 30000)}`;
 
@@ -157,12 +157,12 @@ export const analyzeSourceCode = async (code: string): Promise<ScanReport> => {
 
 export const getRemediationAdvice = async (vulnTitle: string, description: string, userQuery: string): Promise<string> => {
   const modelId = "gemini-3-flash-preview";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
   const prompt = `Vulnerability: ${vulnTitle}\nDescription: ${description}\nUser Query: ${userQuery}`;
-  
+
   try {
-     const result = await ai.models.generateContent({
+    const result = await ai.models.generateContent({
       model: modelId,
       contents: prompt,
       config: {

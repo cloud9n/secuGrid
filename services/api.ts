@@ -28,6 +28,10 @@ export const userApi = {
 export const scanApi = {
     saveScan: (data: any) => api.post('/scans', data),
     getHistory: (limit?: number) => api.get('/scans/history', { params: { limit } }),
+    analyze: (url: string) => api.post('/scans/analyze', { url }),
+    simulateAttack: (url: string, type: string) => api.post('/scans/simulate-attack', { url, type }),
+    getRemediation: (title: string, description: string, query: string) =>
+        api.post('/scans/remediation', { title, description, query }),
 };
 
 export const paymentApi = {
