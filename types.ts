@@ -78,4 +78,4 @@ export interface Repository {
   isPrivate: boolean;
 }
 
-export type AiProvider = 'gemini' | 'openai-compatible';
+export type AiProvider = 'local' | 'gemini' | 'openai-compatible';

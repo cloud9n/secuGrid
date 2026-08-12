@@ -15,6 +15,13 @@ interface SettingsPageProps {
 
 const PROVIDER_PRESETS = [
     {
+        id: 'local',
+        label: 'Local / Self-Hosted',
+        description: 'Uses the SecuGrid local proxy and self-hosted model endpoint.',
+        provider: 'local',
+        model: 'secugrid-qwen2.5-coder-7b',
+    },
+    {
         id: 'gemini',
         label: 'Gemini',
         description: 'Fast default with live search support.',
@@ -37,7 +44,10 @@ const PROVIDER_PRESETS = [
     },
 ] as const;
 
-const MODEL_EXAMPLES: Record<'gemini' | 'openai-compatible', { value: string; label: string }[]> = {
+const MODEL_EXAMPLES: Record<'local' | 'gemini' | 'openai-compatible', { value: string; label: string }[]> = {
+    local: [
+        { value: 'secugrid-qwen2.5-coder-7b', label: 'secugrid-qwen2.5-coder-7b' },
+    ],
     gemini: [
         { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash' },
         { value: 'gemini-3.5-pro', label: 'gemini-3.5-pro' },
@@ -76,8 +86,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
     const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
     const [recentScans, setRecentScans] = useState<ScanReport[]>([]);
     const [loadingScans, setLoadingScans] = useState(true);
-    const [aiProvider, setAiProvider] = useState(localStorage.getItem('secugrid.aiProvider') || user.aiProvider || 'gemini');
-    const [aiModel, setAiModel] = useState(localStorage.getItem('secugrid.aiModel') || user.aiModel || 'gemini-3.5-flash');
+    const [aiProvider, setAiProvider] = useState(localStorage.getItem('secugrid.aiProvider') || user.aiProvider || 'local');
+    const [aiModel, setAiModel] = useState(localStorage.getItem('secugrid.aiModel') || user.aiModel || 'secugrid-qwen2.5-coder-7b');
     const [savingPreferences, setSavingPreferences] = useState(false);
     const hydratedPreferences = useRef(false);
 
@@ -137,7 +147,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
         setAiModel(preset.model);
     };
 
-    const handleProviderChange = (nextProvider: 'gemini' | 'openai-compatible') => {
+    const handleProviderChange = (nextProvider: 'local' | 'gemini' | 'openai-compatible') => {
         setAiProvider(nextProvider);
         const firstSuggestedModel = MODEL_EXAMPLES[nextProvider][0]?.value;
         if (firstSuggestedModel) {
@@ -201,9 +211,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                             <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Provider</label>
                             <select
                                 value={aiProvider}
-                                onChange={(e) => handleProviderChange(e.target.value as 'gemini' | 'openai-compatible')}
+                                onChange={(e) => handleProviderChange(e.target.value as 'local' | 'gemini' | 'openai-compatible')}
                                 className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
                             >
+                                <option value="local">Local / Self-Hosted</option>
                                 <option value="gemini">Gemini</option>
                                 <option value="openai-compatible">OpenAI-compatible / Meta-Llama gateway</option>
                             </select>
@@ -214,7 +225,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                                 type="text"
                                 value={aiModel}
                                 onChange={(e) => setAiModel(e.target.value)}
-                                placeholder={aiProvider === 'gemini' ? 'gemini-3.5-flash' : 'meta-llama/Meta-Llama-3.1-70B-Instruct'}
+                                placeholder={aiProvider === 'local' ? 'secugrid-qwen2.5-coder-7b' : aiProvider === 'gemini' ? 'gemini-3.5-flash' : 'meta-llama/Meta-Llama-3.1-70B-Instruct'}
                                 className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
                             />
                             <div className="mt-2">

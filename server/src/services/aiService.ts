@@ -2,13 +2,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 import axios from "axios";
 import { ScanReport } from "../types";
 
-export type AiProvider = "gemini" | "openai-compatible";
+export type AiProvider = "local" | "gemini" | "openai-compatible";
 
 export interface AiConfig {
   provider?: AiProvider;
   model?: string;
 }
 
+const DEFAULT_LOCAL_BASE_URL = process.env.LOCAL_AI_BASE_URL || "http://localhost:8080/v1";
+const DEFAULT_LOCAL_MODEL = process.env.LOCAL_AI_MODEL || "secugrid-qwen2.5-coder-7b";
 const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 const DEFAULT_OPENAI_MODEL = process.env.AI_MODEL || "gpt-4o-mini";
 
@@ -76,7 +78,9 @@ const RESPONSE_SCHEMA = {
 };
 
 const normalizeProvider = (provider?: string): AiProvider => {
+  if (provider === "local") return "local";
   if (provider === "openai-compatible") return "openai-compatible";
+  if (process.env.AI_PROVIDER === "local" || process.env.LOCAL_AI_BASE_URL) return "local";
   return "gemini";
 };
 
@@ -110,6 +114,30 @@ const generateWithGemini = async (prompt: string, systemInstruction: string, mod
   }
 
   return parseJsonPayload<ScanReport>(response.text);
+};
+
+const generateWithLocal = async (prompt: string, systemInstruction: string, model?: string) => {
+  const response = await axios.post(
+    `${DEFAULT_LOCAL_BASE_URL.replace(/\/$/, "")}/chat/completions`,
+    {
+      model: model || DEFAULT_LOCAL_MODEL,
+      messages: buildOpenAiMessages(prompt, systemInstruction),
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    },
+    {
+      headers: {
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  const content = response.data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("No response from local model.");
+  }
+
+  return parseJsonPayload<ScanReport>(content);
 };
 
 const buildOpenAiMessages = (prompt: string, systemInstruction: string) => ([
@@ -156,6 +184,10 @@ const generateReport = async (
   useSearch = false
 ) => {
   const provider = normalizeProvider(config.provider || process.env.AI_PROVIDER);
+
+  if (provider === "local") {
+    return generateWithLocal(prompt, systemInstruction, config.model);
+  }
 
   if (provider === "openai-compatible") {
     return generateWithOpenAiCompatible(prompt, systemInstruction, config.model);
@@ -220,6 +252,31 @@ export const getRemediationAdvice = async (
   const provider = normalizeProvider(config.provider || process.env.AI_PROVIDER);
 
   try {
+    if (provider === "local") {
+      const response = await axios.post(
+        `${DEFAULT_LOCAL_BASE_URL.replace(/\/$/, "")}/chat/completions`,
+        {
+          model: config.model || DEFAULT_LOCAL_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: "You are a senior security engineer. Provide specific, code-centric remediation advice."
+            },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        },
+        {
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      return response.data?.choices?.[0]?.message?.content || "Unable to generate advice.";
+    }
+
     if (provider === "openai-compatible") {
       const baseURL = process.env.AI_BASE_URL || process.env.OPENAI_BASE_URL;
       const apiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY;
