@@ -15,6 +15,43 @@ interface DashboardPageProps {
   onClearRepo?: () => void;
 }
 
+const PROVIDER_PRESETS = [
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    description: 'Uses Gemini with live search and the default fast model.',
+    provider: 'gemini',
+    model: 'gemini-3.5-flash',
+  },
+  {
+    id: 'meta',
+    label: 'Meta / Llama Gateway',
+    description: 'Targets an OpenAI-compatible gateway that exposes Meta/Llama models.',
+    provider: 'openai-compatible',
+    model: 'meta-llama/Meta-Llama-3.1-70B-Instruct',
+  },
+  {
+    id: 'custom',
+    label: 'Custom',
+    description: 'Use your own provider settings and model ID.',
+    provider: 'openai-compatible',
+    model: 'gpt-4o-mini',
+  },
+] as const;
+
+const MODEL_EXAMPLES: Record<'gemini' | 'openai-compatible', { value: string; label: string }[]> = {
+  gemini: [
+    { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash' },
+    { value: 'gemini-3.5-pro', label: 'gemini-3.5-pro' },
+    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
+  ],
+  'openai-compatible': [
+    { value: 'meta-llama/Meta-Llama-3.1-70B-Instruct', label: 'Meta-Llama-3.1-70B-Instruct' },
+    { value: 'meta-llama/Meta-Llama-3.1-8B-Instruct', label: 'Meta-Llama-3.1-8B-Instruct' },
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+  ],
+};
+
 const WorldMapSVG = ({ activePoints }: { activePoints: { x: number, y: number }[] }) => (
   <svg viewBox="0 0 1000 500" className="w-full h-full opacity-40">
     <path
@@ -60,6 +97,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user, onScanComplete, pre
   const [activeNodes, setActiveNodes] = useState<{ x: number, y: number }[]>([]);
   const [simMetrics, setSimMetrics] = useState<{ time: string, requests: number }[]>([]);
   const [gridIntegrity, setGridIntegrity] = useState(99.1);
+  const [aiProvider, setAiProvider] = useState(user.aiProvider || localStorage.getItem('secugrid.aiProvider') || 'gemini');
+  const [aiModel, setAiModel] = useState(user.aiModel || localStorage.getItem('secugrid.aiModel') || 'gemini-3.5-flash');
 
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verifiedUrls, setVerifiedUrls] = useState<string[]>([]);
@@ -75,6 +114,31 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user, onScanComplete, pre
       setTargetInput(prefilledRepo.fullName);
     }
   }, [prefilledRepo]);
+
+  useEffect(() => {
+    if (user.aiProvider) setAiProvider(user.aiProvider);
+    if (user.aiModel) setAiModel(user.aiModel);
+  }, [user.aiProvider, user.aiModel]);
+
+  useEffect(() => {
+    localStorage.setItem('secugrid.aiProvider', aiProvider);
+    localStorage.setItem('secugrid.aiModel', aiModel);
+  }, [aiProvider, aiModel]);
+
+  const applyPreset = (presetId: string) => {
+    const preset = PROVIDER_PRESETS.find(item => item.id === presetId);
+    if (!preset) return;
+    setAiProvider(preset.provider);
+    setAiModel(preset.model);
+  };
+
+  const handleProviderChange = (nextProvider: 'gemini' | 'openai-compatible') => {
+    setAiProvider(nextProvider);
+    const firstSuggestedModel = MODEL_EXAMPLES[nextProvider][0]?.value;
+    if (firstSuggestedModel) {
+      setAiModel(firstSuggestedModel);
+    }
+  };
 
   useEffect(() => {
     integrityInterval.current = window.setInterval(() => {
@@ -167,13 +231,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user, onScanComplete, pre
       setStatus(AgentStatus.ANALYSIS);
       let report: ScanReport;
       if (scanMode === 'CODE' || scanMode === 'REPO') {
-        const resp = await scanApi.analyze(targetInput);
+        const resp = await scanApi.analyze(targetInput, { provider: aiProvider, model: aiModel });
         report = resp.data;
       } else if (scanMode === 'URL') {
-        const resp = await scanApi.analyze(targetInput);
+        const resp = await scanApi.analyze(targetInput, { provider: aiProvider, model: aiModel });
         report = resp.data;
       } else {
-        const resp = await scanApi.simulateAttack(targetInput, scanMode);
+        const resp = await scanApi.simulateAttack(targetInput, scanMode, { provider: aiProvider, model: aiModel });
         report = resp.data;
       }
 
@@ -194,8 +258,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user, onScanComplete, pre
       if (scanMode === 'REPO') onClearRepo?.();
       setTimeout(() => onScanComplete(report), 1500);
 
-    } catch (error) {
-      addLog('SYSTEM', 'Neural link collapsed. Protocol failed.', 'error');
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const message = status === 429
+        ? 'Gemini API quota exceeded. Check your API key billing or quota.'
+        : error?.response?.data?.error || 'Analysis failed. Check the server logs.';
+      addLog('SYSTEM', message, 'error');
       setStatus(AgentStatus.FAILED);
       setActiveTask('Operation failed.');
       stopSimulationMetrics();
@@ -352,6 +420,77 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ user, onScanComplete, pre
                     )}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">AI Provider</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {PROVIDER_PRESETS.map((preset) => {
+                    const active = aiProvider === preset.provider && aiModel === preset.model;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => applyPreset(preset.id)}
+                        className={`text-left rounded border px-3 py-2 transition-all ${active
+                          ? 'bg-cyber-accent text-cyber-900 border-cyber-accent'
+                          : 'bg-cyber-900 text-gray-300 border-cyber-700 hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider">{preset.label}</span>
+                          {active && <span className="text-[10px] font-bold">Active</span>}
+                        </div>
+                        <div className={`text-[10px] mt-1 ${active ? 'text-cyber-900/80' : 'text-gray-500'}`}>
+                          {preset.description}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2">
+                  <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Provider Mode</label>
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => handleProviderChange(e.target.value as 'gemini' | 'openai-compatible')}
+                    className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
+                  >
+                    <option value="gemini">Gemini</option>
+                    <option value="openai-compatible">OpenAI-compatible / Meta-Llama gateway</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Model ID</label>
+                <input
+                  type="text"
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder={aiProvider === 'gemini' ? 'gemini-3.5-flash' : 'gpt-4o-mini or your Meta/Llama model'}
+                  className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
+                />
+                <div className="mt-2">
+                  <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Suggested Models</label>
+                  <select
+                    value={MODEL_EXAMPLES[aiProvider as 'gemini' | 'openai-compatible'].some(item => item.value === aiModel) ? aiModel : ''}
+                    onChange={(e) => {
+                      if (e.target.value) setAiModel(e.target.value);
+                    }}
+                    className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
+                  >
+                    <option value="">Choose a known-good model</option>
+                    {MODEL_EXAMPLES[aiProvider as 'gemini' | 'openai-compatible'].map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">
+                  Gemini uses `GEMINI_API_KEY` and optionally `GEMINI_MODEL`. OpenAI-compatible gateways use `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL`.
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  If you pick a Meta/Llama gateway, make sure the model name matches what that provider exposes exactly.
+                </p>
               </div>
 
               <button

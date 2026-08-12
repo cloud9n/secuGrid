@@ -7,6 +7,11 @@ const router = express.Router();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
+const mapUserResponse = (user: any) => {
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+};
+
 router.post('/register', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -28,13 +33,7 @@ router.post('/register', async (req, res) => {
         const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
         res.status(201).json({
             token,
-            user: {
-                id: user.id,
-                email: user.email,
-                credits: user.credits,
-                githubConnected: user.githubConnected,
-                apiKeys: []
-            }
+            user: mapUserResponse({ ...user, apiKeys: [] })
         });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
@@ -59,8 +58,7 @@ router.post('/login', async (req, res) => {
         }
 
         const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
-        const { password: _, ...userWithoutPassword } = user;
-        res.json({ token, user: userWithoutPassword });
+        res.json({ token, user: mapUserResponse(user) });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }

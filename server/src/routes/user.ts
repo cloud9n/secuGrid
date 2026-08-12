@@ -36,6 +36,26 @@ router.get('/profile', authenticate, async (req: any, res) => {
     }
 });
 
+router.patch('/preferences', authenticate, async (req: any, res) => {
+    try {
+        const { aiProvider, aiModel } = req.body;
+
+        const updatedUser = await prisma.user.update({
+            where: { id: req.userId },
+            data: {
+                ...(typeof aiProvider === 'string' ? { aiProvider } : {}),
+                ...(typeof aiModel === 'string' ? { aiModel } : {})
+            },
+            include: { apiKeys: true }
+        });
+
+        const { password, ...userWithoutPassword } = updatedUser;
+        res.json(userWithoutPassword);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 router.post('/api-keys', authenticate, async (req: any, res) => {
     try {
         const { key } = req.body;

@@ -47,35 +47,46 @@ const authenticateKey = async (req: any, res: any, next: any) => {
     }
 };
 
-import { analyzeSourceCode, analyzeTarget, simulateAttack, getRemediationAdvice } from '../services/geminiService';
+import { analyzeSourceCode, analyzeTarget, simulateAttack, getRemediationAdvice } from '../services/aiService';
+
+const handleAiError = (res: any, error: unknown, fallbackMessage: string) => {
+    if ((error as any)?.status === 429 || (error as any)?.response?.status === 429) {
+        return res.status(429).json({
+            error: 'AI provider quota exceeded. Check billing or switch providers/models.'
+        });
+    }
+
+    console.error(fallbackMessage, error);
+    return res.status(500).json({ error: fallbackMessage });
+};
 
 router.post('/analyze', authenticate, async (req: any, res) => {
     try {
-        const { url } = req.body;
-        const report = await analyzeTarget(url);
+        const { url, provider, model } = req.body;
+        const report = await analyzeTarget(url, { provider, model });
         res.json(report);
     } catch (error) {
-        res.status(500).json({ error: 'Analysis failed' });
+        handleAiError(res, error, 'Analysis failed');
     }
 });
 
 router.post('/simulate-attack', authenticate, async (req: any, res) => {
     try {
-        const { url, type } = req.body;
-        const report = await simulateAttack(url, type);
+        const { url, type, provider, model } = req.body;
+        const report = await simulateAttack(url, type, { provider, model });
         res.json(report);
     } catch (error) {
-        res.status(500).json({ error: 'Simulation failed' });
+        handleAiError(res, error, 'Simulation failed');
     }
 });
 
 router.post('/remediation', authenticate, async (req: any, res) => {
     try {
-        const { title, description, query } = req.body;
-        const advice = await getRemediationAdvice(title, description, query);
+        const { title, description, query, provider, model } = req.body;
+        const advice = await getRemediationAdvice(title, description, query, { provider, model });
         res.json({ advice });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to get advice' });
+        handleAiError(res, error, 'Failed to get advice');
     }
 });
 
@@ -131,14 +142,14 @@ router.get('/history', authenticate, async (req: any, res) => {
 
 router.post('/cli', authenticateKey, async (req: any, res) => {
     try {
-        const { codeContent, targetUrl } = req.body;
+        const { codeContent, targetUrl, provider, model } = req.body;
 
         if (req.user.credits < 1) {
             return res.status(403).json({ error: 'Insufficient credits. Buy more to continue.' });
         }
 
         // Run actual AI analysis
-        const report = await analyzeSourceCode(codeContent);
+        const report = await analyzeSourceCode(codeContent, { provider, model });
 
         // Save scan
         await prisma.scan.create({
@@ -162,8 +173,7 @@ router.post('/cli', authenticateKey, async (req: any, res) => {
 
         res.json(report);
     } catch (error) {
-        console.error('CLI Scan Error:', error);
-        res.status(500).json({ error: 'AI Analysis failed' });
+        handleAiError(res, error, 'AI Analysis failed');
     }
 });
 

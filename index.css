@@ -1,0 +1,38 @@
+/* Shared form styling for the whole app */
+input,
+textarea,
+select {
+  color: #f8fafc;
+  background-color: #0f172a;
+  caret-color: #10b981;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+/* Make browser autofill match the dark theme */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+select:-webkit-autofill,
+textarea:-webkit-autofill {
+  -webkit-text-fill-color: #f8fafc;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset;
+  box-shadow: 0 0 0px 1000px #0f172a inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+

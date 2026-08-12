@@ -21,6 +21,7 @@ export const authApi = {
 
 export const userApi = {
     getProfile: () => api.get('/user/profile'),
+    updatePreferences: (data: { aiProvider?: string; aiModel?: string }) => api.patch('/user/preferences', data),
     addApiKey: (key: string) => api.post('/user/api-keys', { key }),
     deleteApiKey: (id: string) => api.delete(`/user/api-keys/${id}`),
 };
@@ -28,10 +29,10 @@ export const userApi = {
 export const scanApi = {
     saveScan: (data: any) => api.post('/scans', data),
     getHistory: (limit?: number) => api.get('/scans/history', { params: { limit } }),
-    analyze: (url: string) => api.post('/scans/analyze', { url }),
-    simulateAttack: (url: string, type: string) => api.post('/scans/simulate-attack', { url, type }),
-    getRemediation: (title: string, description: string, query: string) =>
-        api.post('/scans/remediation', { title, description, query }),
+    analyze: (url: string, config?: { provider?: string; model?: string }) => api.post('/scans/analyze', { url, ...config }),
+    simulateAttack: (url: string, type: string, config?: { provider?: string; model?: string }) => api.post('/scans/simulate-attack', { url, type, ...config }),
+    getRemediation: (title: string, description: string, query: string, config?: { provider?: string; model?: string }) =>
+        api.post('/scans/remediation', { title, description, query, ...config }),
 };
 
 export const paymentApi = {

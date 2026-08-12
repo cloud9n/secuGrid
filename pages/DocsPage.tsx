@@ -18,26 +18,34 @@ const DocsPage: React.FC = () => {
     { id: 'terminal', title: 'CLI Commands', icon: <Terminal className="w-4 h-4" /> },
   ];
 
-  const mcpCode = `
-import { McpServer } from "@modelcontextprotocol/sdk/server";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio";
+  const mcpCode = `import { McpServer } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import axios from "axios";
+import * as fs from "fs";
+import * as path from "path";
+import { glob } from "glob";
 
 const server = new McpServer({
   name: "secugrid",
   version: "1.0.0",
 });
 
-server.tool("scan_file", {
-  path: "string",
-}, async ({ path }) => {
-  const apiKey = process.env.SECUGRID_API_KEY;
-  // logic to call SecuGrid API...
-  return { content: [{ type: "text", text: "Vulnerabilities found: 0" }] };
+server.tool("scan_project", {
+  directory: z.string().describe("Absolute path to scan"),
+  apiKey: z.string().optional(),
+}, async ({ directory, apiKey }) => {
+  const key = apiKey || process.env.SECUGRID_API_KEY;
+  // Deep scan logic calling SecuGrid API...
+  const response = await axios.post("http://localhost:5000/api/scans/cli", {
+    codeContent: "...", 
+    targetUrl: "mcp-scan"
+  }, { headers: { "X-API-KEY": key }});
+  return { content: [{ type: "text", text: response.data.summary }] };
 });
 
 const transport = new StdioServerTransport();
-await server.connect(transport);
-  `;
+await server.connect(transport);`;
 
   const configCode = `{
   "mcpServers": {
@@ -58,8 +66,8 @@ await server.connect(transport);
         <div className="sticky top-24 space-y-1">
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 px-3">Documentation</h3>
           {sections.map(s => (
-            <a 
-              key={s.id} 
+            <a
+              key={s.id}
               href={`#${s.id}`}
               className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:bg-cyber-800 hover:text-white transition-all text-sm"
             >
@@ -69,15 +77,15 @@ await server.connect(transport);
           ))}
           <hr className="my-6 border-cyber-800" />
           <div className="px-3">
-             <div className="bg-cyber-accent/10 border border-cyber-accent/20 p-4 rounded-xl">
-               <div className="flex items-center gap-2 text-cyber-accent text-xs font-bold mb-2">
-                 <Zap className="w-3 h-3" />
-                 Pro Tip
-               </div>
-               <p className="text-[11px] text-gray-400 leading-relaxed">
-                 Use the MCP server with **Cursor** or **VS Code** to get real-time security fixes as you type.
-               </p>
-             </div>
+            <div className="bg-cyber-accent/10 border border-cyber-accent/20 p-4 rounded-xl">
+              <div className="flex items-center gap-2 text-cyber-accent text-xs font-bold mb-2">
+                <Zap className="w-3 h-3" />
+                Pro Tip
+              </div>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Use the MCP server with **Cursor** or **VS Code** to get real-time security fixes as you type.
+              </p>
+            </div>
           </div>
         </div>
       </aside>
@@ -87,8 +95,8 @@ await server.connect(transport);
         <section id="intro">
           <h1 className="text-4xl font-bold text-white mb-6">Welcome to SecuGrid Docs</h1>
           <p className="text-lg text-gray-400 leading-relaxed mb-8">
-            SecuGrid is an AI-powered security operations platform designed for modern engineering teams. 
-            This guide will help you integrate our autonomous agents into your workflow, from repository 
+            SecuGrid is an AI-powered security operations platform designed for modern engineering teams.
+            This guide will help you integrate our autonomous agents into your workflow, from repository
             scanning to real-time IDE protection.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -130,7 +138,7 @@ await server.connect(transport);
             </h2>
             <div className="bg-cyber-900 border border-cyber-700 px-3 py-1 rounded-full text-[10px] font-bold text-cyber-accent">BETA v1.0.0</div>
           </div>
-          
+
           <div className="space-y-8 text-gray-400">
             <div>
               <h3 className="text-white font-bold mb-4">Step 1: Generate API Key</h3>
@@ -144,7 +152,7 @@ await server.connect(transport);
                 <pre className="bg-cyber-950 p-6 rounded-xl border border-cyber-700 font-mono text-xs overflow-x-auto text-gray-300">
                   {mcpCode}
                 </pre>
-                <button 
+                <button
                   onClick={() => copyCode(mcpCode, 'mcp')}
                   className="absolute top-4 right-4 p-2 bg-cyber-800 hover:bg-cyber-700 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -160,7 +168,7 @@ await server.connect(transport);
                 <pre className="bg-cyber-950 p-6 rounded-xl border border-cyber-700 font-mono text-xs overflow-x-auto text-gray-300">
                   {configCode}
                 </pre>
-                <button 
+                <button
                   onClick={() => copyCode(configCode, 'config')}
                   className="absolute top-4 right-4 p-2 bg-cyber-800 hover:bg-cyber-700 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -176,35 +184,48 @@ await server.connect(transport);
             <Terminal className="w-6 h-6 text-cyber-accent" />
             CLI Reference
           </h2>
-          <div className="space-y-4">
-             <div className="bg-cyber-800 border border-cyber-700 rounded-xl p-4 flex items-center justify-between group">
+          <div className="space-y-6">
+            <div className="prose prose-invert max-w-none text-gray-400">
+              <p>The SecuGrid CLI allows you to audit local projects without uploading your entire source code tree. Analysis is performed on-demand via our neural engine.</p>
+              <h4 className="text-white text-sm font-bold mt-4">Installation</h4>
+              <div className="bg-cyber-950 p-3 rounded-lg border border-cyber-700 font-mono text-xs text-cyber-accent flex justify-between items-center group">
+                <code>npm install -g .  # Run inside cli directory</code>
+                <button onClick={() => copyCode('npm install -g .', 'inst')} className="opacity-0 group-hover:opacity-100 transition-all">
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <div className="bg-cyber-800 border border-cyber-700 rounded-xl p-4 flex items-center justify-between group">
                 <div>
-                   <div className="text-xs font-bold text-gray-500 mb-1">SCAN CURRENT DIRECTORY</div>
-                   <code className="text-cyber-accent font-mono">secugrid scan .</code>
+                  <div className="text-xs font-bold text-gray-500 mb-1">SCAN DIRECTORY</div>
+                  <code className="text-cyber-accent font-mono text-sm">secugrid scan . --key sk_secugrid_...</code>
                 </div>
-                <button onClick={() => copyCode('secugrid scan .', 'cli1')} className="p-2 opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => copyCode('secugrid scan . --key ', 'cli1')} className="p-2 opacity-0 group-hover:opacity-100 transition-all">
                   {copiedSection === 'cli1' ? <Check className="w-4 h-4 text-cyber-accent" /> : <Copy className="w-4 h-4 text-gray-500" />}
                 </button>
-             </div>
-             <div className="bg-cyber-800 border border-cyber-700 rounded-xl p-4 flex items-center justify-between group">
+              </div>
+              <div className="bg-cyber-800 border border-cyber-700 rounded-xl p-4 flex items-center justify-between group">
                 <div>
-                   <div className="text-xs font-bold text-gray-500 mb-1">CHECK CREDITS</div>
-                   <code className="text-cyber-accent font-mono">secugrid credits</code>
+                  <div className="text-xs font-bold text-gray-500 mb-1">EXCLUDE PATTERNS</div>
+                  <code className="text-cyber-accent font-mono text-sm">secugrid scan . -e "**/tests/**" "**/logs/**"</code>
                 </div>
-                <button onClick={() => copyCode('secugrid credits', 'cli2')} className="p-2 opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => copyCode('secugrid scan . -e ""', 'cli2')} className="p-2 opacity-0 group-hover:opacity-100 transition-all">
                   {copiedSection === 'cli2' ? <Check className="w-4 h-4 text-cyber-accent" /> : <Copy className="w-4 h-4 text-gray-500" />}
                 </button>
-             </div>
+              </div>
+            </div>
           </div>
         </section>
 
         <footer className="pt-20 border-t border-cyber-800 flex justify-between items-center text-gray-500 text-xs">
-           <p>© 2024 SecuGrid Corp. Neural Security for Modern Devs.</p>
-           <div className="flex gap-4">
-             <a href="#" className="hover:text-white transition-colors">Twitter</a>
-             <a href="#" className="hover:text-white transition-colors">GitHub</a>
-             <a href="#" className="hover:text-white transition-colors">Support</a>
-           </div>
+          <p>© 2024 SecuGrid Corp. Neural Security for Modern Devs.</p>
+          <div className="flex gap-4">
+            <a href="#" className="hover:text-white transition-colors">Twitter</a>
+            <a href="#" className="hover:text-white transition-colors">GitHub</a>
+            <a href="#" className="hover:text-white transition-colors">Support</a>
+          </div>
         </footer>
       </main>
     </div>

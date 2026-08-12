@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    command:
+      - --model=/models/secugrid-qwen2.5-coder-7b
+      - --served-model-name=secugrid-qwen2.5-coder-7b
+      - --guided-decoding-backend=outlines
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.90
+    volumes:
+      - ./models:/models
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  ai-proxy:
+    build: .
+    environment:
+      LOCAL_MODEL_URL: "http://vllm:8000/v1"
+      LOCAL_MODEL_NAME: "secugrid-qwen2.5-coder-7b"
+      REDIS_URL: "redis://redis:6379/0"
+      AI_CACHE_TTL_SECONDS: "86400"
+      FALLBACK_PROVIDER_URL: "${FALLBACK_PROVIDER_URL:-}"
+      FALLBACK_PROVIDER_API_KEY: "${FALLBACK_PROVIDER_API_KEY:-}"
+      FALLBACK_MODEL: "${FALLBACK_MODEL:-gpt-4o-mini}"
+    depends_on:
+      - vllm
+      - redis
+    ports:
+      - "8080:8080"
+    command: uvicorn proxy:app --host 0.0.0.0 --port 8080

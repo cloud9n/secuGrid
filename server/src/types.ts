@@ -57,8 +57,6 @@ export interface User {
   githubUser?: string;
   createdAt?: string;
   apiKeys: ApiKey[];
-  aiProvider?: AiProvider;
-  aiModel?: string;
 }
 
 export interface ApiKey {
@@ -77,5 +75,3 @@ export interface Repository {
   language: string;
   isPrivate: boolean;
 }
-
-export type AiProvider = 'gemini' | 'openai-compatible';

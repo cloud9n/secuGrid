@@ -248,6 +248,7 @@ export default function App() {
                   onDeleteKey={handleDeleteKey}
                   onViewHistory={() => navigate('/history')}
                   onViewReport={(report) => navigate('/report', { state: { report } })}
+                  onUpdateUser={handleUpdateUser}
                 />
               </ProtectedRoute>
             }

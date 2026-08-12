@@ -34,7 +34,9 @@ program
 
         try {
             // Find all source files
-            const patterns = options.exclude || ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'];
+            const defaultExcludes = ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**', '**/package-lock.json', '**/yarn.lock'];
+            const patterns = options.exclude ? [...options.exclude, ...defaultExcludes] : defaultExcludes;
+
             const files = await glob('**/*.{ts,tsx,js,jsx,py,go,java,c,cpp,php}', {
                 cwd: absoluteDir,
                 ignore: patterns,
@@ -48,9 +50,8 @@ program
 
             console.log(chalk.blue(`Found ${files.length} files. Preparing analysis...`));
 
-            // For this implementation, we read a sample of files to avoid hitting limits or implement a multi-part scan
-            // Let's take the first 20 files as a proof of concept or concatenate
-            const maxFiles = 30;
+            // Increased limit now that backend supports larger payloads
+            const maxFiles = 100;
             const filesToRead = files.slice(0, maxFiles);
 
             let combinedContent = '';

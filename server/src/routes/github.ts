@@ -32,7 +32,10 @@ router.post('/connect', authenticate, async (req: any, res) => {
         // Verify token with GitHub
         const githubResponse = await axios.get('https://api.github.com/user', {
             headers: {
-                Authorization: `Bearer ${token}`
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'User-Agent': 'SecuGrid'
             }
         });
 
@@ -66,7 +69,10 @@ router.get('/repos', authenticate, async (req: any, res) => {
 
         const reposResponse = await axios.get('https://api.github.com/user/repos?sort=updated&per_page=100', {
             headers: {
-                Authorization: `Bearer ${user.githubToken}`
+                Authorization: `Bearer ${user.githubToken}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'User-Agent': 'SecuGrid'
             }
         });
 
@@ -82,6 +88,21 @@ router.get('/repos', authenticate, async (req: any, res) => {
 
         res.json(repos);
     } catch (error) {
+        if (axios.isAxiosError(error)) {
+            const status = error.response?.status;
+            console.error('GitHub fetch repos error', status, error.response?.data || error.message);
+
+            if (status === 401) {
+                return res.status(401).json({ error: 'GitHub token is invalid or expired. Reconnect GitHub.' });
+            }
+
+            if (status === 403) {
+                return res.status(502).json({ error: 'GitHub denied the request. Check token permissions or rate limits.' });
+            }
+
+            return res.status(502).json({ error: 'GitHub is unavailable. Please try again.' });
+        }
+
         console.error('GitHub fetch repos error', error);
         res.status(500).json({ error: 'Failed to fetch repositories' });
     }

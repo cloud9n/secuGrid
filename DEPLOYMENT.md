@@ -67,6 +67,10 @@ This guide outlines the steps to deploy both the SecuGrid backend (Node.js/Expre
     | :--- | :--- | :--- |
     | `VITE_API_URL` | `https://secugrid-api.onrender.com/api` | **Must** end with `/api` |
     | `VITE_GEMINI_API_KEY` | `your-gemini-key` | Your Google Gemini API Key. |
+    | `AI_PROVIDER` | `gemini` | Optional default AI provider. Use `openai-compatible` for gateways that can expose Meta/Llama models. |
+    | `AI_MODEL` | `gemini-3.5-flash` | Default model for the selected provider. |
+    | `AI_BASE_URL` | `https://api.openai.com/v1` | Base URL for an OpenAI-compatible provider. |
+    | `AI_API_KEY` | `your-api-key` | API key for the OpenAI-compatible provider. |
 
 4.  **Rewrite Rules**
     Since this is a Single Page Application (SPA), you need to handle client-side routing.

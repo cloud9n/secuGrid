@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, ScanReport } from '../types';
-import { ShieldCheck, Zap, User as UserIcon, Copy, Loader2, Clock, Calendar, AlertTriangle, ChevronRight, Activity, Key, Plus, Eye, EyeOff, Check, Trash2 } from 'lucide-react';
-import { scanApi } from '../services/api';
+import { ShieldCheck, Zap, User as UserIcon, Copy, Loader2, Clock, Calendar, AlertTriangle, ChevronRight, Activity, Key, Plus, Eye, EyeOff, Check, Trash2, Cpu } from 'lucide-react';
+import { scanApi, userApi } from '../services/api';
 
 interface SettingsPageProps {
     user: User;
@@ -10,7 +10,45 @@ interface SettingsPageProps {
     onDeleteKey: (id: string) => void;
     onViewHistory: () => void;
     onViewReport: (report: ScanReport) => void;
+    onUpdateUser: (updates: Partial<User>) => void;
 }
+
+const PROVIDER_PRESETS = [
+    {
+        id: 'gemini',
+        label: 'Gemini',
+        description: 'Fast default with live search support.',
+        provider: 'gemini',
+        model: 'gemini-3.5-flash',
+    },
+    {
+        id: 'meta',
+        label: 'Meta / Llama Gateway',
+        description: 'OpenAI-compatible gateway for Meta/Llama models.',
+        provider: 'openai-compatible',
+        model: 'meta-llama/Meta-Llama-3.1-70B-Instruct',
+    },
+    {
+        id: 'custom',
+        label: 'Custom',
+        description: 'Bring your own provider and model name.',
+        provider: 'openai-compatible',
+        model: 'gpt-4o-mini',
+    },
+] as const;
+
+const MODEL_EXAMPLES: Record<'gemini' | 'openai-compatible', { value: string; label: string }[]> = {
+    gemini: [
+        { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash' },
+        { value: 'gemini-3.5-pro', label: 'gemini-3.5-pro' },
+        { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
+    ],
+    'openai-compatible': [
+        { value: 'meta-llama/Meta-Llama-3.1-70B-Instruct', label: 'Meta-Llama-3.1-70B-Instruct' },
+        { value: 'meta-llama/Meta-Llama-3.1-8B-Instruct', label: 'Meta-Llama-3.1-8B-Instruct' },
+        { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    ],
+};
 
 const mapScanToReport = (scan: any): ScanReport => ({
     targetUrl: scan.targetUrl,
@@ -25,11 +63,23 @@ const mapScanToReport = (scan: any): ScanReport => ({
     }
 });
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ user, onAddCredits, onGenerateKey, onDeleteKey, onViewHistory, onViewReport }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({
+    user,
+    onAddCredits,
+    onGenerateKey,
+    onDeleteKey,
+    onViewHistory,
+    onViewReport,
+    onUpdateUser
+}) => {
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
     const [recentScans, setRecentScans] = useState<ScanReport[]>([]);
     const [loadingScans, setLoadingScans] = useState(true);
+    const [aiProvider, setAiProvider] = useState(localStorage.getItem('secugrid.aiProvider') || user.aiProvider || 'gemini');
+    const [aiModel, setAiModel] = useState(localStorage.getItem('secugrid.aiModel') || user.aiModel || 'gemini-3.5-flash');
+    const [savingPreferences, setSavingPreferences] = useState(false);
+    const hydratedPreferences = useRef(false);
 
     useEffect(() => {
         const fetchRecentScans = async () => {
@@ -47,6 +97,54 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, onAddCredits, onGener
         }
     }, [user]);
 
+    useEffect(() => {
+        if (user.aiProvider) {
+            setAiProvider(user.aiProvider);
+        }
+        if (user.aiModel) {
+            setAiModel(user.aiModel);
+        }
+        if (user.aiProvider || user.aiModel) {
+            hydratedPreferences.current = true;
+        }
+    }, [user.aiProvider, user.aiModel]);
+
+    useEffect(() => {
+        localStorage.setItem('secugrid.aiProvider', aiProvider);
+        localStorage.setItem('secugrid.aiModel', aiModel);
+
+        if (!hydratedPreferences.current) return;
+
+        const timer = window.setTimeout(async () => {
+            try {
+                setSavingPreferences(true);
+                const response = await userApi.updatePreferences({ aiProvider, aiModel });
+                onUpdateUser(response.data);
+            } catch (error) {
+                console.error('Failed to save AI preferences', error);
+            } finally {
+                setSavingPreferences(false);
+            }
+        }, 500);
+
+        return () => window.clearTimeout(timer);
+    }, [aiProvider, aiModel, onUpdateUser]);
+
+    const applyPreset = (presetId: string) => {
+        const preset = PROVIDER_PRESETS.find(item => item.id === presetId);
+        if (!preset) return;
+        setAiProvider(preset.provider);
+        setAiModel(preset.model);
+    };
+
+    const handleProviderChange = (nextProvider: 'gemini' | 'openai-compatible') => {
+        setAiProvider(nextProvider);
+        const firstSuggestedModel = MODEL_EXAMPLES[nextProvider][0]?.value;
+        if (firstSuggestedModel) {
+            setAiModel(firstSuggestedModel);
+        }
+    };
+
     const copyKey = (key: string) => {
         navigator.clipboard.writeText(key);
         setCopiedKey(key);
@@ -59,7 +157,89 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, onAddCredits, onGener
 
     return (
         <div className="max-w-5xl mx-auto p-8 space-y-12 animate-in fade-in duration-500">
-            {/* User Profile Section */}
+            <section>
+                <div className="flex items-center gap-3 mb-8">
+                    <Cpu className="w-8 h-8 text-cyber-accent" />
+                    <h2 className="text-3xl font-bold text-white">AI Preferences</h2>
+                </div>
+
+                <div className="bg-cyber-800 border border-cyber-700 rounded-xl p-8 space-y-6">
+                    <p className="text-gray-400 max-w-2xl">
+                        Pick the model backend you want SecuGrid to use for scans and remediation. The choice is saved locally and shared with the dashboard.
+                    </p>
+                    <div className="text-[10px] text-gray-500">
+                        {savingPreferences ? 'Saving to your account...' : 'Changes auto-save to your account after a short pause.'}
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-3">
+                        {PROVIDER_PRESETS.map((preset) => {
+                            const active = aiProvider === preset.provider && aiModel === preset.model;
+                            return (
+                                <button
+                                    key={preset.id}
+                                    type="button"
+                                    onClick={() => applyPreset(preset.id)}
+                                    className={`text-left rounded-xl border p-4 transition-all ${active
+                                        ? 'bg-cyber-accent text-cyber-900 border-cyber-accent'
+                                        : 'bg-cyber-900 text-gray-300 border-cyber-700 hover:border-gray-500'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold uppercase tracking-wider">{preset.label}</span>
+                                        {active && <span className="text-[10px] font-bold">Active</span>}
+                                    </div>
+                                    <div className={`text-[10px] mt-2 ${active ? 'text-cyber-900/80' : 'text-gray-500'}`}>
+                                        {preset.description}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Provider</label>
+                            <select
+                                value={aiProvider}
+                                onChange={(e) => handleProviderChange(e.target.value as 'gemini' | 'openai-compatible')}
+                                className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
+                            >
+                                <option value="gemini">Gemini</option>
+                                <option value="openai-compatible">OpenAI-compatible / Meta-Llama gateway</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Model</label>
+                            <input
+                                type="text"
+                                value={aiModel}
+                                onChange={(e) => setAiModel(e.target.value)}
+                                placeholder={aiProvider === 'gemini' ? 'gemini-3.5-flash' : 'meta-llama/Meta-Llama-3.1-70B-Instruct'}
+                                className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
+                            />
+                            <div className="mt-2">
+                                <label className="block text-[10px] text-gray-500 uppercase font-bold mb-2">Suggested Models</label>
+                                <select
+                                    value={MODEL_EXAMPLES[aiProvider as 'gemini' | 'openai-compatible'].some(item => item.value === aiModel) ? aiModel : ''}
+                                    onChange={(e) => {
+                                        if (e.target.value) setAiModel(e.target.value);
+                                    }}
+                                    className="w-full bg-cyber-950 border border-cyber-700 rounded p-2 text-white font-mono text-xs focus:border-cyber-accent outline-none"
+                                >
+                                    <option value="">Choose a known-good model</option>
+                                    {MODEL_EXAMPLES[aiProvider as 'gemini' | 'openai-compatible'].map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-2">
+                                Gemini uses `GEMINI_API_KEY` and optionally `GEMINI_MODEL`. OpenAI-compatible gateways use `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL`.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section>
                 <div className="flex items-center gap-3 mb-8">
                     <UserIcon className="w-8 h-8 text-cyber-accent" />
@@ -94,7 +274,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, onAddCredits, onGener
                             )}
                         </div>
 
-                        {/* Recent Scans Widget */}
                         <div className="mt-8 pt-6 border-t border-cyber-700">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -183,7 +362,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ user, onAddCredits, onGener
                 </div>
             </section>
 
-            {/* API Keys Section */}
             <section>
                 <div className="flex items-center gap-3 mb-8">
                     <div className="p-2 bg-cyber-800 rounded-lg border border-cyber-700">
